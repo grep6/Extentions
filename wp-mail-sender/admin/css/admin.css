@@ -1,0 +1,58 @@
+.wp-mail-sender-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin: 30px 0;
+}
+
+.stat-box {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.stat-box h3 {
+    margin: 0 0 10px 0;
+    font-size: 32px;
+    font-weight: 600;
+    color: #2271b1;
+}
+
+.stat-box p {
+    margin: 0;
+    color: #646970;
+    font-size: 14px;
+}
+
+.status-draft { color: #996800; }
+.status-scheduled { color: #0073aa; }
+.status-sending { color: #d63638; }
+.status-sent { color: #00a32a; }
+.status-failed { color: #d63638; }
+
+.wp-mail-sender-editor {
+    margin: 20px 0;
+}
+
+.wp-mail-sender-editor .form-table th {
+    width: 150px;
+}
+
+.template-variables {
+    background: #f0f0f1;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 20px 0;
+}
+
+.template-variables code {
+    display: inline-block;
+    margin: 5px;
+    padding: 3px 8px;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+}

@@ -1,30 +1,185 @@
-WC KPI Cohortes
-================
+# Hub Extensions WordPress
+> Ensemble de plugins WordPress développés pour l'alternance
 
-Plugin WordPress minimal pour analyser les commandes WooCommerce par code postal / rue et afficher une carte basée sur OpenStreetMap.
+## 📊 Vue d'ensemble
 
-Installation rapide
-- Copier le dossier `wp-wc-kpi-cohortes` dans `wp-content/plugins/`
-- Activer le plugin depuis l'administration WordPress
-- Aller dans le menu "KPI Cohortes" (permissions admin requises)
+Ce dépôt regroupe plusieurs extensions WordPress développées pour améliorer les fonctionnalités de WooCommerce et la gestion des emails.
 
-Fonctionnalités
-- Formulaire d'analyse : plage de dates, produits (IDs), statut, filtres 'nouveaux clients' et 'nouveaux codes postaux'
-- Graphiques : histogramme / courbe. Support basique de comparatif produits si des breakdowns sont disponibles.
-- Carte : OpenStreetMap (Leaflet) affichant des cercles proportionnels au nombre de commandes par code postal (géocodage via Nominatim, résultats mis en cache dans `localStorage` côté navigateur et dans les options WP côté serveur).
+---
 
-Notes et limites
-- Le plugin agrège par `postcode` + `address_1`. Il s'appuie sur une table `{$wpdb->prefix}wc_order_addresses` (schema fourni par ton data sample). Si ta structure diffère, adapte le nom de table/colonnes.
-- Le géocodage utilise l'API publique Nominatim (OpenStreetMap). Respecte les règles d'utilisation (rate limits). Le plugin met en cache les résultats par code postal.
-- L'implémentation 3D isométrique complète (Three.js + extrusion topojson) n'est pas encore implémentée — la carte actuelle est 2D Leaflet avec cercles extrudés visuellement. Je peux pousser la version Three.js (tiles -> texture + extrusions) si tu veux.
+## 🚀 Projets
 
-Prochaines étapes recommandées
-1. Vérifier sur une installation de test (local) avec WooCommerce activé.
-2. Ajouter tests unitaires et un petit script pour peupler la table d'adresses si besoin.
-3. Implémenter la vraie vue 3D isométrique (Three.js) si nécessaire — nécessite mapping postcode->polygon ou centroid dataset.
+### 1. WP Mail Sender
+**📁 Dossier :** `wp-mail-sender/`  
+**📅 Date de création :** Novembre 2024  
+**🔧 Dernière maintenance :** Décembre 2024  
+**📌 Version :** 1.1.0
 
-Si tu veux, je peux maintenant :
-- Ajouter la détection "nouveaux clients" côté serveur (actuellement partiellement supportée),
-- Remplacer la visualisation par une vraie extrusion 3D via Three.js + topojson (besoin d'un fichier GeoJSON/topojson ou d'une table postcode->coords),
-- Ajouter options d'administration (purger cache, clé API si tu veux utiliser un service payant de geocoding).
+#### Description
+Extension d'envoi d'emails via SMTP avec gestion de templates et listes de diffusion. Permet la création de campagnes d'emailing personnalisées avec segmentation des destinataires.
+
+#### Fonctionnalités principales
+- Configuration SMTP avec détection automatique de l'environnement (staging/production)
+- Gestion de listes de diffusion
+- Création et gestion de templates d'emails
+- Segmentation des destinataires
+- Envoi de campagnes d'emailing
+- Interface d'administration complète
+
+#### Technologies utilisées
+- **Backend :** PHP 7.4+
+- **Frontend :** JavaScript (ES6), CSS3
+- **CMS :** WordPress 5.8+
+- **Dépendances :** WooCommerce 6.0+
+
+---
+
+### 2. WC KPI Cohortes (Version JSON)
+**📁 Dossier :** `wc-kpi-cohortes-v-json/`  
+**📅 Date de création :** Octobre 2024  
+**🔧 Dernière maintenance :** Novembre 2024  
+**📌 Version :** 0.3
+
+#### Description
+Dashboard admin pour analyser les commandes WooCommerce par code postal et rue avec visualisation cartographique 3D isométrique de la France.
+
+#### Fonctionnalités principales
+- Analyse des commandes par zones géographiques
+- Formulaire d'analyse avec filtres avancés (dates, produits, statuts)
+- Graphiques interactifs (histogrammes, courbes)
+- Carte OpenStreetMap avec visualisation des commandes
+- Géocodage automatique avec cache
+- Shortcode `[tdb_kpis]` pour affichage frontend
+- Widget tableau de bord WordPress
+
+#### Technologies utilisées
+- **Backend :** PHP 7.4+
+- **Frontend :** JavaScript (ES6), Leaflet.js, Chart.js
+- **APIs :** Nominatim (OpenStreetMap)
+- **Base de données :** MySQL (tables WooCommerce)
+- **CMS :** WordPress 5.8+, WooCommerce 6.0+
+
+---
+
+### 3. Tri Segmentation
+**📁 Dossier :** `Tri_segmentation/`  
+**📅 Date de création :** Septembre 2024  
+**🔧 Dernière maintenance :** Octobre 2024
+
+#### Description
+Collection de variantes du système KPI Cohortes pour la segmentation et l'indexation des données clients.
+
+#### Sous-projets
+
+##### 3.1 Index KPI - Version Originale
+**📂 Sous-dossier :** `Tri_segmentation/indexKPI/kpi-index-vo/`  
+**📌 Version :** 0.0 (Version initiale)
+
+- Dashboard d'analyse des commandes par code postal
+- Carte 3D isométrique de la France
+- Système de cache pour géocodage
+
+##### 3.2 KPI Index VO
+**📂 Sous-dossier :** `Tri_segmentation/kpi-index-vo/`  
+**📌 Version :** Développement
+
+- Variante optimisée du système d'indexation
+- Focus sur la performance des requêtes
+
+#### Technologies utilisées
+- **Backend :** PHP 7.4+
+- **Frontend :** JavaScript, CSS3
+- **CMS :** WordPress 5.8+, WooCommerce 6.0+
+
+---
+
+## 💻 Stack technique globale
+
+| Technologie | Version | Usage |
+|------------|---------|-------|
+| PHP | 7.4+ | Backend WordPress |
+| JavaScript | ES6+ | Frontend interactif |
+| WordPress | 5.8+ | CMS principal |
+| WooCommerce | 6.0+ | E-commerce |
+| MySQL | 5.7+ | Base de données |
+| Leaflet.js | 1.9+ | Cartographie |
+| Chart.js | 3.0+ | Graphiques |
+| CSS3 | - | Styles |
+
+---
+
+## 📦 Installation générale
+
+### Prérequis
+- WordPress 5.8 ou supérieur
+- WooCommerce 6.0 ou supérieur
+- PHP 7.4 ou supérieur
+- MySQL 5.7 ou supérieur
+
+### Procédure d'installation
+1. Copier le dossier du plugin souhaité dans `wp-content/plugins/`
+2. Activer le plugin depuis l'administration WordPress
+3. Configurer les paramètres selon la documentation de chaque plugin
+
+---
+
+## 🔒 Sécurité
+
+Tous les plugins incluent :
+- Vérifications `ABSPATH` pour empêcher l'accès direct
+- Validation et échappement des données
+- Nonces pour les actions AJAX
+- Vérification des permissions utilisateur
+
+---
+
+## 📝 Notes de développement
+
+### Environnements
+- **Production :** tabac-des-battieres.com
+- **Staging :** staging.tabac-des-battieres.com
+
+### Conventions de code
+- Standards WordPress Coding Standards
+- Préfixes de fonctions : `wp_mail_sender_`, `wc_kpi_`
+- Classes PHP en CamelCase
+- Fonctions en snake_case
+
+---
+
+## 📄 Licence
+
+GPL-2.0+ - Tous droits réservés
+
+---
+
+## 👤 Auteur
+
+**Antonin**  
+Développé dans le cadre de l'alternance pour Tabac des Battières
+
+---
+
+## 📅 Historique des versions
+
+| Date | Projet | Version | Changements |
+|------|--------|---------|-------------|
+| Déc 2024 | WP Mail Sender | 1.1.0 | Dernière maintenance |
+| Nov 2024 | WC KPI Cohortes | 0.3 | Ajout shortcode et widget |
+| Oct 2024 | Tri Segmentation | 0.0 | Versions initiales |
+
+---
+
+## 🚧 Roadmap
+
+### WP Mail Sender
+- [ ] Statistiques d'ouverture des emails
+- [ ] A/B testing de templates
+- [ ] Intégration avec services tiers
+
+### WC KPI Cohortes
+- [ ] Implémentation complète 3D avec Three.js
+- [ ] Export des données en CSV/Excel
+- [ ] Filtres avancés supplémentaires
+- [ ] API REST pour intégrations tierces
 
