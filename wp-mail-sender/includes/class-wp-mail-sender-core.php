@@ -113,20 +113,41 @@ class WP_Mail_Sender_Core {
             return false;
         }
         
-        // Get list
-        error_log('>>> Getting list ID: ' . $campaign->list_id);
-        $list = $this->db->get_list($campaign->list_id);
-        error_log('>>> List found: ' . ($list ? 'YES' : 'NO'));
-        if (!$list) {
-            error_log('[WP Mail Sender CORE ERROR] List not found: ' . $campaign->list_id);
+        // Get recipients from either list or segment
+        $recipients = array();
+        
+        if (!empty($campaign->segment_id)) {
+            error_log('>>> Getting segment ID: ' . $campaign->segment_id);
+            $segment = $this->db->get_segment($campaign->segment_id);
+            error_log('>>> Segment found: ' . ($segment ? 'YES' : 'NO'));
+            
+            if (!$segment) {
+                error_log('[WP Mail Sender CORE ERROR] Segment not found: ' . $campaign->segment_id);
+                return false;
+            }
+            
+            $filters = json_decode($segment->filters, true) ?: array();
+            error_log('>>> Segment filters: ' . print_r($filters, true));
+            
+            $recipients = $this->db->get_segment_recipients($filters);
+            error_log('>>> Recipients from segment: ' . count($recipients));
+        } elseif (!empty($campaign->list_id)) {
+            error_log('>>> Getting list ID: ' . $campaign->list_id);
+            $list = $this->db->get_list($campaign->list_id);
+            error_log('>>> List found: ' . ($list ? 'YES' : 'NO'));
+            
+            if (!$list) {
+                error_log('[WP Mail Sender CORE ERROR] List not found: ' . $campaign->list_id);
+                return false;
+            }
+            
+            error_log('>>> List query_type: ' . $list->query_type);
+            $recipients = $this->get_list_recipients($list);
+            error_log('>>> Recipients from list: ' . count($recipients));
+        } else {
+            error_log('[WP Mail Sender CORE ERROR] No list_id or segment_id in campaign');
             return false;
         }
-        
-        error_log('>>> List query_type: ' . $list->query_type);
-        
-        // Get recipients based on list configuration
-        $recipients = $this->get_list_recipients($list);
-        error_log('>>> Recipients count: ' . count($recipients));
         
         if (empty($recipients)) {
             error_log('[WP Mail Sender CORE ERROR] No recipients found for list: ' . $list->id);
@@ -142,6 +163,8 @@ class WP_Mail_Sender_Core {
         
         $sent_count = 0;
         $failed_count = 0;
+        $update_interval = 10; // Update database every 10 emails
+        $counter = 0;
         
         // Send emails in batches
         foreach ($recipients as $recipient) {
@@ -162,6 +185,21 @@ class WP_Mail_Sender_Core {
                 $failed_count++;
             }
             
+            // Update progress periodically
+            $counter++;
+            if ($counter % $update_interval === 0) {
+                $wpdb->update(
+                    "`{$mailing_db}`.`{$prefix}campaigns`",
+                    array(
+                        'sent_count' => $sent_count,
+                        'failed_count' => $failed_count,
+                        'updated_at' => current_time('mysql')
+                    ),
+                    array('id' => $campaign_id)
+                );
+                error_log('[WP Mail Sender CORE] Progress: ' . $sent_count . '/' . count($recipients) . ' sent');
+            }
+            
             // Sleep to avoid overwhelming SMTP server
             usleep(100000); // 0.1 second
         }
@@ -173,7 +211,8 @@ class WP_Mail_Sender_Core {
                 'status' => 'sent',
                 'sent_at' => current_time('mysql'),
                 'sent_count' => $sent_count,
-                'failed_count' => $failed_count
+                'failed_count' => $failed_count,
+                'updated_at' => current_time('mysql')
             ),
             array('id' => $campaign_id)
         );
@@ -274,8 +313,11 @@ class WP_Mail_Sender_Core {
     private function add_inline_styles($html) {
         // Add inline styles to common HTML elements
         $styles = array(
-            '<p>' => '<p style="margin:0 0 15px 0;padding:0;">',
-            '<p ' => '<p style="margin:0 0 15px 0;padding:0;" ',
+            '<br>' => '<br style="line-height:1.6;">',
+            '<br/>' => '<br style="line-height:1.6;" />',
+            '<br />' => '<br style="line-height:1.6;" />',
+            '<p>' => '<p style="margin:0 0 15px 0;padding:0;line-height:1.6;">',
+            '<p ' => '<p style="margin:0 0 15px 0;padding:0;line-height:1.6;" ',
             '<h1>' => '<h1 style="color:#2c3e50;font-size:28px;font-weight:bold;margin:20px 0 10px 0;line-height:1.3;">',
             '<h2>' => '<h2 style="color:#2c3e50;font-size:24px;font-weight:bold;margin:20px 0 10px 0;line-height:1.3;">',
             '<h3>' => '<h3 style="color:#2c3e50;font-size:20px;font-weight:600;margin:20px 0 10px 0;line-height:1.3;">',
@@ -285,7 +327,7 @@ class WP_Mail_Sender_Core {
             '<li>' => '<li style="margin-bottom:8px;">',
             '<blockquote>' => '<blockquote style="border-left:4px solid #3498db;padding:10px 20px;margin:15px 0;background:#f8f9fa;color:#555555;font-style:italic;">',
             '<code>' => '<code style="background:#f4f4f4;padding:2px 6px;border-radius:3px;font-family:\'Courier New\',monospace;font-size:14px;">',
-            '<pre>' => '<pre style="background:#f4f4f4;padding:15px;border-radius:5px;overflow-x:auto;margin:15px 0;font-family:\'Courier New\',monospace;">',
+            '<pre>' => '<pre style="background:#f4f4f4;padding:15px;border-radius:5px;overflow-x:auto;margin:15px 0;font-family:\'Courier New\',monospace;white-space:pre-wrap;">',
             '<img ' => '<img style="max-width:100%;height:auto;display:block;margin:15px 0;" ',
             '<hr>' => '<hr style="border:none;border-top:2px solid #e0e0e0;margin:25px 0;">',
             '<hr />' => '<hr style="border:none;border-top:2px solid #e0e0e0;margin:25px 0;" />',

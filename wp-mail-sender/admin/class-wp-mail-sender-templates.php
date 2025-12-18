@@ -75,7 +75,14 @@ class WP_Mail_Sender_Templates {
                 <?php endif; ?>
             </h1>
             
-            <?php settings_errors('wp_mail_sender_templates'); ?>
+            <?php 
+            // Display transient messages
+            if ($msg = get_transient('wp_mail_sender_templates_message')) {
+                delete_transient('wp_mail_sender_templates_message');
+                echo '<div class="notice notice-' . esc_attr($msg['type']) . ' is-dismissible"><p>' . esc_html($msg['message']) . '</p></div>';
+            }
+            settings_errors('wp_mail_sender_templates'); 
+            ?>
             
             <?php if (isset($_GET['action']) && $_GET['action'] === 'new' || $edit_id): ?>
                 <!-- Template Editor -->
@@ -125,15 +132,15 @@ class WP_Mail_Sender_Templates {
                                         'toolbar1' => 'formatselect,bold,italic,underline,strikethrough,|,bullist,numlist,blockquote,|,alignleft,aligncenter,alignright,|,link,unlink,|,forecolor,backcolor',
                                         'toolbar2' => 'undo,redo,|,pastetext,removeformat,|,charmap,hr,|,outdent,indent,|,wp_adv',
                                         'block_formats' => 'Paragraphe=p;Titre 1=h1;Titre 2=h2;Titre 3=h3;Citation=blockquote;Code=pre',
-                                        'forced_root_block' => 'p',
-                                        'force_br_newlines' => false,
-                                        'force_p_newlines' => true,
-                                        'convert_newlines_to_brs' => false,
+                                        'forced_root_block' => '',
+                                        'force_br_newlines' => true,
+                                        'force_p_newlines' => false,
+                                        'convert_newlines_to_brs' => true,
                                         'remove_linebreaks' => false,
-                                        'wpautop' => true,
-                                        'paste_as_text' => false,
+                                        'apply_source_formatting' => true,
                                         'content_css' => WP_MAIL_SENDER_URL . 'admin/css/editor-email.css'
                                     ),
+                                    'wpautop' => false,
                                     'quicktags' => array(
                                         'buttons' => 'strong,em,link,block,del,ins,img,ul,ol,li,code,close'
                                     )
@@ -235,16 +242,32 @@ class WP_Mail_Sender_Templates {
         error_log('[WP Mail Sender Templates] save_template result: ' . var_export($result, true));
         
         if ($result) {
-            add_settings_error('wp_mail_sender_templates', 'template_saved', '✅ Template enregistré avec succès.', 'success');
+            // Success notification via transient AND admin notice
+            set_transient('wp_mail_sender_templates_message', array(
+                'type' => 'success',
+                'message' => $template_id ? '✅ Template modifié avec succès !' : '✅ Template créé avec succès !'
+            ), 30);
+            
+            // Additional notice for better visibility
+            add_settings_error(
+                'wp_mail_sender_templates',
+                'template_saved',
+                $template_id ? '✅ Template modifié avec succès !' : '✅ Template créé avec succès !',
+                'success'
+            );
+            
             $redirect = add_query_arg(
                 array('page' => 'wp-mail-sender-templates', 'saved' => '1'),
                 admin_url('admin.php')
             );
             error_log('[WP Mail Sender Templates INFO] [' . current_time('mysql') . '] Template saved: ' . $data['name']);
         } else {
-            add_settings_error('wp_mail_sender_templates', 'template_error', '❌ Erreur lors de l\'enregistrement du template.', 'error');
+            set_transient('wp_mail_sender_templates_message', array(
+                'type' => 'error',
+                'message' => '❌ Erreur lors de l\'enregistrement du template.'
+            ), 30);
             $redirect = add_query_arg(
-                array('page' => 'wp-mail-sender-templates', 'error' => '1'),
+                array('page' => 'wp-mail-sender-templates'),
                 admin_url('admin.php')
             );
             error_log('[WP Mail Sender Templates ERROR] [' . current_time('mysql') . '] Failed to save template');
@@ -261,7 +284,6 @@ class WP_Mail_Sender_Templates {
         if (!current_user_can('manage_options')) {
             wp_die('Permission denied');
         }
-        
         $template_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
         
         check_admin_referer('delete_template_' . $template_id);
@@ -269,9 +291,17 @@ class WP_Mail_Sender_Templates {
         $result = $this->db->delete_template($template_id);
         
         if ($result) {
-            add_settings_error('wp_mail_sender_templates', 'template_deleted', '✅ Template supprimé avec succès.', 'success');
+            set_transient('wp_mail_sender_templates_message', array(
+                'type' => 'success',
+                'message' => '✅ Template supprimé avec succès.'
+            ), 30);
+            error_log('[WP Mail Sender Templates INFO] [' . current_time('mysql') . '] Template deleted: ' . $template_id);
         } else {
-            add_settings_error('wp_mail_sender_templates', 'template_delete_error', '❌ Erreur lors de la suppression du template.', 'error');
+            set_transient('wp_mail_sender_templates_message', array(
+                'type' => 'error',
+                'message' => '❌ Erreur lors de la suppression du template.'
+            ), 30);
+            error_log('[WP Mail Sender Templates ERROR] [' . current_time('mysql') . '] Failed to delete template: ' . $template_id);
         }
         
         $redirect = add_query_arg(
@@ -281,8 +311,6 @@ class WP_Mail_Sender_Templates {
             ),
             admin_url('admin.php')
         );
-        
-        error_log('[WP Mail Sender Templates INFO] [' . current_time('mysql') . '] Template deleted: ID ' . $template_id);
         
         wp_redirect($redirect);
         exit;

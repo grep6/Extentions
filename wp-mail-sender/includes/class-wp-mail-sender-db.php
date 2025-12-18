@@ -144,15 +144,22 @@ class WP_Mail_Sender_DB {
             id bigint(20) NOT NULL AUTO_INCREMENT,
             name varchar(255) NOT NULL,
             template_id bigint(20) NOT NULL,
-            list_id bigint(20) NOT NULL,
+            list_id bigint(20) DEFAULT NULL,
+            segment_id bigint(20) DEFAULT NULL,
             status varchar(50) DEFAULT 'draft' COMMENT 'draft, scheduled, sending, sent, failed',
             scheduled_at datetime DEFAULT NULL,
             sent_at datetime DEFAULT NULL,
             total_recipients int(11) DEFAULT 0,
             sent_count int(11) DEFAULT 0,
             failed_count int(11) DEFAULT 0,
+            open_count int(11) DEFAULT 0,
+            click_count int(11) DEFAULT 0,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id)
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY list_id (list_id),
+            KEY segment_id (segment_id),
+            KEY status (status)
         ) $charset_collate;";
         
         // Logs table
@@ -563,8 +570,9 @@ class WP_Mail_Sender_DB {
         $prefix = WP_MAIL_SENDER_TABLE_PREFIX;
         $table = "`{$this->mailing_db}`.`{$prefix}campaigns`";
         return $this->mailing_wpdb->get_row($this->mailing_wpdb->prepare(
-            "SELECT id, name, template_id, list_id, status, scheduled_at, sent_at, 
-                    total_recipients, sent_count, failed_count, created_at 
+            "SELECT id, name, template_id, list_id, segment_id, status, scheduled_at, sent_at, 
+                    total_recipients, sent_count, failed_count, open_count, click_count, 
+                    created_at, updated_at 
              FROM {$table} WHERE id = %d", 
             $id
         ));
@@ -597,10 +605,11 @@ class WP_Mail_Sender_DB {
         } else {
             // Insert new campaign
             $result = $this->mailing_wpdb->query($this->mailing_wpdb->prepare(
-                "INSERT INTO {$table} (name, template_id, list_id, status, created_at) VALUES (%s, %d, %d, %s, %s)",
+                "INSERT INTO {$table} (name, template_id, list_id, segment_id, status, created_at) VALUES (%s, %d, %s, %s, %s, %s)",
                 $data['name'],
                 $data['template_id'],
                 $data['list_id'],
+                $data['segment_id'],
                 $data['status'],
                 $data['created_at']
             ));
@@ -742,7 +751,10 @@ class WP_Mail_Sender_DB {
         
         // Check if manual emails are provided - they take priority
         if (!empty($filters['manual_emails'])) {
-            return $this->get_manual_email_recipients($filters['manual_emails']);
+            error_log('[WP Mail Sender DB DEBUG] Using manual emails from segment');
+            $recipients = $this->get_manual_email_recipients($filters['manual_emails']);
+            error_log('[WP Mail Sender DB DEBUG] Manual recipients count: ' . count($recipients));
+            return $recipients;
         }
         
         // Base query - SIMPLIFIED for better performance and compatibility
@@ -1022,6 +1034,10 @@ class WP_Mail_Sender_DB {
         
         $source_db = $this->source_db;
         $prefix = WP_MAIL_SENDER_SOURCE_PREFIX;
+        
+        // Normalize line endings (handle both \r\n and \n)
+        $manual_emails_string = str_replace("\r\n", "\n", $manual_emails_string);
+        $manual_emails_string = str_replace("\r", "\n", $manual_emails_string);
         
         // Parse emails from string
         $emails = array_filter(

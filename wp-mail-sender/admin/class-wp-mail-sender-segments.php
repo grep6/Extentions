@@ -64,7 +64,14 @@ class WP_Mail_Sender_Segments {
                 <?php endif; ?>
             </h1>
             
-            <?php settings_errors('wp_mail_sender_segments'); ?>
+            <?php 
+            // Display transient messages
+            if ($msg = get_transient('wp_mail_sender_segments_message')) {
+                delete_transient('wp_mail_sender_segments_message');
+                echo '<div class="notice notice-' . esc_attr($msg['type']) . ' is-dismissible"><p>' . esc_html($msg['message']) . '</p></div>';
+            }
+            settings_errors('wp_mail_sender_segments'); 
+            ?>
             
             <?php if (isset($_GET['action']) && $_GET['action'] === 'new' || $edit_id): ?>
                 <!-- Segment Editor -->
@@ -604,8 +611,12 @@ class WP_Mail_Sender_Segments {
                                 $filters = json_decode($seg->filters, true) ?: array();
                                 $active_filters = array();
                                 if (!empty($filters['manual_emails'])) {
-                                    $email_count = count(array_filter(array_map('trim', explode("\n", $filters['manual_emails']))));
-                                    $active_filters[] = '📧 Liste manuelle (' . $email_count . ' emails)';
+                                    // Normalize line endings before counting
+                                    $manual_emails = str_replace(array("\r\n", "\r"), "\n", $filters['manual_emails']);
+                                    $email_list = array_filter(array_map('trim', explode("\n", $manual_emails)));
+                                    $valid_emails = array_filter($email_list, function($e) { return filter_var($e, FILTER_VALIDATE_EMAIL); });
+                                    $email_count = count($valid_emails);
+                                    $active_filters[] = '📧 Liste manuelle (' . $email_count . ' email' . ($email_count > 1 ? 's' : '') . ')';
                                 } else {
                                     if (!empty($filters['date_from']) || !empty($filters['date_to'])) $active_filters[] = 'Période';
                                     if (!empty($filters['new_customers'])) $active_filters[] = 'Nouveaux clients';
@@ -648,8 +659,14 @@ class WP_Mail_Sender_Segments {
         
         $segment_id = isset($_POST['segment_id']) ? intval($_POST['segment_id']) : 0;
         
+        // Normalize manual emails line endings
+        $manual_emails = isset($_POST['manual_emails']) ? $_POST['manual_emails'] : '';
+        $manual_emails = str_replace("\r\n", "\n", $manual_emails);
+        $manual_emails = str_replace("\r", "\n", $manual_emails);
+        $manual_emails = sanitize_textarea_field($manual_emails);
+        
         $filters = array(
-            'manual_emails' => sanitize_textarea_field($_POST['manual_emails'] ?? ''),
+            'manual_emails' => $manual_emails,
             'date_from' => sanitize_text_field($_POST['date_from'] ?? ''),
             'date_to' => sanitize_text_field($_POST['date_to'] ?? ''),
             'new_customers' => !empty($_POST['new_customers']) ? 1 : 0,
@@ -677,16 +694,22 @@ class WP_Mail_Sender_Segments {
         $result = $this->db->save_segment($data);
         
         if ($result) {
-            add_settings_error('wp_mail_sender_segments', 'segment_saved', '✅ Segment enregistré avec succès.', 'success');
+            set_transient('wp_mail_sender_segments_message', array(
+                'type' => 'success',
+                'message' => '✅ Segment enregistré avec succès.'
+            ), 30);
             $redirect = add_query_arg(
-                array('page' => 'wp-mail-sender-segments', 'saved' => '1'),
+                array('page' => 'wp-mail-sender-segments'),
                 admin_url('admin.php')
             );
             error_log('[WP Mail Sender Segments INFO] [' . current_time('mysql') . '] Segment saved: ' . $data['name']);
         } else {
-            add_settings_error('wp_mail_sender_segments', 'segment_error', '❌ Erreur lors de l\'enregistrement du segment.', 'error');
+            set_transient('wp_mail_sender_segments_message', array(
+                'type' => 'error',
+                'message' => '❌ Erreur lors de l\'enregistrement du segment.'
+            ), 30);
             $redirect = add_query_arg(
-                array('page' => 'wp-mail-sender-segments', 'error' => '1'),
+                array('page' => 'wp-mail-sender-segments'),
                 admin_url('admin.php')
             );
             error_log('[WP Mail Sender Segments ERROR] [' . current_time('mysql') . '] Failed to save segment');
@@ -711,16 +734,21 @@ class WP_Mail_Sender_Segments {
         $result = $this->db->delete_segment($segment_id);
         
         if ($result) {
-            add_settings_error('wp_mail_sender_segments', 'segment_deleted', '✅ Segment supprimé avec succès.', 'success');
+            set_transient('wp_mail_sender_segments_message', array(
+                'type' => 'success',
+                'message' => '✅ Segment supprimé avec succès.'
+            ), 30);
+            error_log('[WP Mail Sender Segments INFO] [' . current_time('mysql') . '] Segment deleted: ' . $segment_id);
         } else {
-            add_settings_error('wp_mail_sender_segments', 'segment_delete_error', '❌ Erreur lors de la suppression du segment.', 'error');
+            set_transient('wp_mail_sender_segments_message', array(
+                'type' => 'error',
+                'message' => '❌ Erreur lors de la suppression du segment.'
+            ), 30);
+            error_log('[WP Mail Sender Segments ERROR] [' . current_time('mysql') . '] Failed to delete segment: ' . $segment_id);
         }
         
         $redirect = add_query_arg(
-            array(
-                'page' => 'wp-mail-sender-segments',
-                'deleted' => $result ? '1' : '0'
-            ),
+            array('page' => 'wp-mail-sender-segments'),
             admin_url('admin.php')
         );
         

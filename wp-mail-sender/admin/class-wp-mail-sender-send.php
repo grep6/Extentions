@@ -55,7 +55,14 @@ class WP_Mail_Sender_Send {
         <div class="wrap">
             <h1>📧 Envoyer une campagne</h1>
             
-            <?php settings_errors('wp_mail_sender_send'); ?>
+            <?php 
+            // Display transient messages
+            if ($msg = get_transient('wp_mail_sender_send_message')) {
+                delete_transient('wp_mail_sender_send_message');
+                echo '<div class="notice notice-' . esc_attr($msg['type']) . ' is-dismissible"><p>' . esc_html($msg['message']) . '</p></div>';
+            }
+            settings_errors('wp_mail_sender_send'); 
+            ?>
             
             <?php if (empty($templates)): ?>
                 <div class="notice notice-warning">
@@ -200,10 +207,14 @@ class WP_Mail_Sender_Send {
         $wpdb = $this->db->get_mailing_wpdb();
         $prefix = WP_MAIL_SENDER_TABLE_PREFIX;
         $campaigns = $wpdb->get_results("
-            SELECT c.*, t.name as template_name, l.name as list_name
+            SELECT c.*, 
+                   t.name as template_name, 
+                   l.name as list_name,
+                   s.name as segment_name
             FROM `{$mailing_db}`.`{$prefix}campaigns` c
             LEFT JOIN `{$mailing_db}`.`{$prefix}templates` t ON c.template_id = t.id
             LEFT JOIN `{$mailing_db}`.`{$prefix}lists` l ON c.list_id = l.id
+            LEFT JOIN `{$mailing_db}`.`{$prefix}segments` s ON c.segment_id = s.id
             ORDER BY c.created_at DESC
             LIMIT 20
         ");
@@ -223,16 +234,33 @@ class WP_Mail_Sender_Send {
                     <th>Statut</th>
                     <th>Total</th>
                     <th>Envoyés</th>
-                    <th>Échoués</th>
+                    <th>Taux succès</th>
                     <th>Date</th>
+                    <th>Mise à jour</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($campaigns as $campaign): ?>
+                    <?php 
+                    $success_rate = $campaign->total_recipients > 0 
+                        ? round(($campaign->sent_count / $campaign->total_recipients) * 100, 1) 
+                        : 0;
+                    $has_failures = $campaign->failed_count > 0;
+                    ?>
                     <tr>
                         <td><strong><?php echo esc_html($campaign->name); ?></strong></td>
                         <td><?php echo esc_html($campaign->template_name); ?></td>
-                        <td><?php echo esc_html($campaign->list_name); ?></td>
+                        <td>
+                            <?php 
+                            if (!empty($campaign->segment_name)) {
+                                echo '📊 ' . esc_html($campaign->segment_name);
+                            } elseif (!empty($campaign->list_name)) {
+                                echo '📋 ' . esc_html($campaign->list_name);
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </td>
                         <td>
                             <?php
                             $status_colors = array(
@@ -241,16 +269,40 @@ class WP_Mail_Sender_Send {
                                 'sent' => '#00a32a',
                                 'failed' => '#d63638'
                             );
+                            $status_labels = array(
+                                'draft' => 'Brouillon',
+                                'sending' => 'En cours',
+                                'sent' => 'Envoyé',
+                                'failed' => 'Échec'
+                            );
                             $color = $status_colors[$campaign->status] ?? '#646970';
+                            $label = $status_labels[$campaign->status] ?? ucfirst($campaign->status);
                             ?>
                             <span style="color: <?php echo $color; ?>; font-weight: 600;">
-                                <?php echo esc_html(ucfirst($campaign->status)); ?>
+                                <?php echo esc_html($label); ?>
                             </span>
                         </td>
                         <td><?php echo esc_html($campaign->total_recipients); ?></td>
-                        <td><?php echo esc_html($campaign->sent_count); ?></td>
-                        <td><?php echo esc_html($campaign->failed_count); ?></td>
+                        <td>
+                            <?php echo esc_html($campaign->sent_count); ?>
+                            <?php if ($has_failures): ?>
+                                <span style="color: #d63638; font-size: 11px;">
+                                    (<?php echo esc_html($campaign->failed_count); ?> échec<?php echo $campaign->failed_count > 1 ? 's' : ''; ?>)
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <strong style="color: <?php echo $success_rate >= 95 ? '#00a32a' : ($success_rate >= 80 ? '#996800' : '#d63638'); ?>;">
+                                <?php echo $success_rate; ?>%
+                            </strong>
+                        </td>
                         <td><?php echo esc_html(date_i18n('d/m/Y H:i', strtotime($campaign->created_at))); ?></td>
+                        <td>
+                            <?php 
+                            $updated = isset($campaign->updated_at) ? $campaign->updated_at : $campaign->created_at;
+                            echo esc_html(date_i18n('d/m/Y H:i', strtotime($updated))); 
+                            ?>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -270,15 +322,16 @@ class WP_Mail_Sender_Send {
         
         $list_type = sanitize_text_field($_POST['list_type']);
         $list_id = 0;
+        $segment_id = 0;
         
         // Determine which recipient source to use
         if ($list_type === 'list') {
             $list_id = intval($_POST['list_id']);
         } elseif ($list_type === 'segment') {
-            $list_id = intval($_POST['segment_id']);
+            $segment_id = intval($_POST['segment_id']);
         }
         
-        if (empty($list_id)) {
+        if (empty($list_id) && empty($segment_id)) {
             $redirect = add_query_arg(
                 array('page' => 'wp-mail-sender-send', 'error' => '1'),
                 admin_url('admin.php')
@@ -291,7 +344,8 @@ class WP_Mail_Sender_Send {
         $campaign_data = array(
             'name' => sanitize_text_field($_POST['campaign_name']),
             'template_id' => intval($_POST['template_id']),
-            'list_id' => $list_id,
+            'list_id' => $list_id > 0 ? $list_id : null,
+            'segment_id' => $segment_id > 0 ? $segment_id : null,
             'status' => 'draft',
             'created_at' => current_time('mysql')
         );
@@ -313,24 +367,29 @@ class WP_Mail_Sender_Send {
         $wpdb = $this->db->get_mailing_wpdb();
         $campaign_id = $wpdb->insert_id;
         
-        error_log('[WP Mail Sender Send INFO] [' . current_time('mysql') . '] Campaign created: ID ' . $campaign_id . ' | Type: ' . $list_type . ' | Recipient ID: ' . $list_id);
+        error_log('[WP Mail Sender Send INFO] [' . current_time('mysql') . '] Campaign created: ID ' . $campaign_id . ' | Type: ' . $list_type . ' | List ID: ' . $list_id . ' | Segment ID: ' . $segment_id);
         
         // Send campaign immediately
         $send_result = $this->core->send_campaign($campaign_id);
         
         if ($send_result) {
-            add_settings_error('wp_mail_sender_send', 'campaign_sent', '✅ Campagne créée et envoyée avec succès.', 'success');
-            $redirect = add_query_arg(
-                array('page' => 'wp-mail-sender-send', 'sent' => '1'),
-                admin_url('admin.php')
-            );
+            set_transient('wp_mail_sender_send_message', array(
+                'type' => 'success',
+                'message' => '✅ Campagne créée et envoyée avec succès.'
+            ), 30);
+            error_log('[WP Mail Sender Send INFO] [' . current_time('mysql') . '] Campaign sent: ' . $campaign_id);
         } else {
-            add_settings_error('wp_mail_sender_send', 'campaign_send_error', '❌ Erreur lors de l\'envoi de la campagne. Vérifiez les logs.', 'error');
-            $redirect = add_query_arg(
-                array('page' => 'wp-mail-sender-send', 'send_error' => '1'),
-                admin_url('admin.php')
-            );
+            set_transient('wp_mail_sender_send_message', array(
+                'type' => 'error',
+                'message' => '❌ Erreur lors de l\'envoi de la campagne. Vérifiez les logs.'
+            ), 30);
+            error_log('[WP Mail Sender Send ERROR] [' . current_time('mysql') . '] Failed to send campaign: ' . $campaign_id);
         }
+        
+        $redirect = add_query_arg(
+            array('page' => 'wp-mail-sender-send'),
+            admin_url('admin.php')
+        );
         
         wp_redirect($redirect);
         exit;
