@@ -217,12 +217,14 @@ class WP_Mail_Sender_Templates {
         error_log('[WP Mail Sender Templates] save_template result: ' . var_export($result, true));
         
         if ($result) {
+            add_settings_error('wp_mail_sender_templates', 'template_saved', '✅ Template enregistré avec succès.', 'success');
             $redirect = add_query_arg(
                 array('page' => 'wp-mail-sender-templates', 'saved' => '1'),
                 admin_url('admin.php')
             );
             error_log('[WP Mail Sender Templates INFO] [' . current_time('mysql') . '] Template saved: ' . $data['name']);
         } else {
+            add_settings_error('wp_mail_sender_templates', 'template_error', '❌ Erreur lors de l\'enregistrement du template.', 'error');
             $redirect = add_query_arg(
                 array('page' => 'wp-mail-sender-templates', 'error' => '1'),
                 admin_url('admin.php')
@@ -247,6 +249,12 @@ class WP_Mail_Sender_Templates {
         check_admin_referer('delete_template_' . $template_id);
         
         $result = $this->db->delete_template($template_id);
+        
+        if ($result) {
+            add_settings_error('wp_mail_sender_templates', 'template_deleted', '✅ Template supprimé avec succès.', 'success');
+        } else {
+            add_settings_error('wp_mail_sender_templates', 'template_delete_error', '❌ Erreur lors de la suppression du template.', 'error');
+        }
         
         $redirect = add_query_arg(
             array(

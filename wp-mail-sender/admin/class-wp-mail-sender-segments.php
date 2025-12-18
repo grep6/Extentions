@@ -501,12 +501,14 @@ class WP_Mail_Sender_Segments {
         $result = $this->db->save_segment($data);
         
         if ($result) {
+            add_settings_error('wp_mail_sender_segments', 'segment_saved', '✅ Segment enregistré avec succès.', 'success');
             $redirect = add_query_arg(
                 array('page' => 'wp-mail-sender-segments', 'saved' => '1'),
                 admin_url('admin.php')
             );
             error_log('[WP Mail Sender Segments INFO] [' . current_time('mysql') . '] Segment saved: ' . $data['name']);
         } else {
+            add_settings_error('wp_mail_sender_segments', 'segment_error', '❌ Erreur lors de l\'enregistrement du segment.', 'error');
             $redirect = add_query_arg(
                 array('page' => 'wp-mail-sender-segments', 'error' => '1'),
                 admin_url('admin.php')
@@ -531,6 +533,12 @@ class WP_Mail_Sender_Segments {
         check_admin_referer('delete_segment_' . $segment_id);
         
         $result = $this->db->delete_segment($segment_id);
+        
+        if ($result) {
+            add_settings_error('wp_mail_sender_segments', 'segment_deleted', '✅ Segment supprimé avec succès.', 'success');
+        } else {
+            add_settings_error('wp_mail_sender_segments', 'segment_delete_error', '❌ Erreur lors de la suppression du segment.', 'error');
+        }
         
         $redirect = add_query_arg(
             array(

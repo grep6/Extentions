@@ -268,10 +268,30 @@ class WP_Mail_Sender_Send {
         
         check_admin_referer('wp_mail_sender_campaign', 'wp_mail_sender_campaign_nonce');
         
+        $list_type = sanitize_text_field($_POST['list_type']);
+        $list_id = 0;
+        
+        // Determine which recipient source to use
+        if ($list_type === 'list') {
+            $list_id = intval($_POST['list_id']);
+        } elseif ($list_type === 'segment') {
+            $list_id = intval($_POST['segment_id']);
+        }
+        
+        if (empty($list_id)) {
+            $redirect = add_query_arg(
+                array('page' => 'wp-mail-sender-send', 'error' => '1'),
+                admin_url('admin.php')
+            );
+            error_log('[WP Mail Sender Send ERROR] [' . current_time('mysql') . '] No list or segment selected');
+            wp_redirect($redirect);
+            exit;
+        }
+        
         $campaign_data = array(
             'name' => sanitize_text_field($_POST['campaign_name']),
             'template_id' => intval($_POST['template_id']),
-            'list_id' => intval($_POST['list_id']),
+            'list_id' => $list_id,
             'status' => 'draft',
             'created_at' => current_time('mysql')
         );
@@ -293,17 +313,19 @@ class WP_Mail_Sender_Send {
         $wpdb = $this->db->get_mailing_wpdb();
         $campaign_id = $wpdb->insert_id;
         
-        error_log('[WP Mail Sender Send INFO] [' . current_time('mysql') . '] Campaign created: ID ' . $campaign_id);
+        error_log('[WP Mail Sender Send INFO] [' . current_time('mysql') . '] Campaign created: ID ' . $campaign_id . ' | Type: ' . $list_type . ' | Recipient ID: ' . $list_id);
         
         // Send campaign immediately
         $send_result = $this->core->send_campaign($campaign_id);
         
         if ($send_result) {
+            add_settings_error('wp_mail_sender_send', 'campaign_sent', '✅ Campagne créée et envoyée avec succès.', 'success');
             $redirect = add_query_arg(
                 array('page' => 'wp-mail-sender-send', 'sent' => '1'),
                 admin_url('admin.php')
             );
         } else {
+            add_settings_error('wp_mail_sender_send', 'campaign_send_error', '❌ Erreur lors de l\'envoi de la campagne. Vérifiez les logs.', 'error');
             $redirect = add_query_arg(
                 array('page' => 'wp-mail-sender-send', 'send_error' => '1'),
                 admin_url('admin.php')
