@@ -740,6 +740,11 @@ class WP_Mail_Sender_DB {
         
         error_log('[WP Mail Sender DB DEBUG] get_segment_recipients called with filters: ' . print_r($filters, true));
         
+        // Check if manual emails are provided - they take priority
+        if (!empty($filters['manual_emails'])) {
+            return $this->get_manual_email_recipients($filters['manual_emails']);
+        }
+        
         // Base query - SIMPLIFIED for better performance and compatibility
         $sql = "SELECT DISTINCT
                 p.ID AS order_id,
@@ -1007,5 +1012,81 @@ class WP_Mail_Sender_DB {
         }
 
         return $results;
+    }
+    
+    /**
+     * Get recipients from manual email list
+     */
+    public function get_manual_email_recipients($manual_emails_string) {
+        global $wpdb;
+        
+        $source_db = $this->source_db;
+        $prefix = WP_MAIL_SENDER_SOURCE_PREFIX;
+        
+        // Parse emails from string
+        $emails = array_filter(
+            array_map('trim', explode("\n", $manual_emails_string)),
+            function($email) {
+                return !empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL);
+            }
+        );
+        
+        if (empty($emails)) {
+            return array();
+        }
+        
+        error_log('[WP Mail Sender DB DEBUG] Processing ' . count($emails) . ' manual emails');
+        
+        // Try to fetch customer names from database if they exist
+        $recipients = array();
+        
+        // Batch process emails to avoid query size issues
+        $chunks = array_chunk($emails, 100);
+        
+        foreach ($chunks as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '%s'));
+            
+            $sql = "SELECT DISTINCT
+                        pm_email.meta_value as billing_email,
+                        MAX(CASE WHEN pm.meta_key = '_billing_first_name' THEN pm.meta_value END) AS billing_first_name,
+                        MAX(CASE WHEN pm.meta_key = '_billing_last_name' THEN pm.meta_value END) AS billing_last_name,
+                        MAX(CASE WHEN pm.meta_key = '_billing_city' THEN pm.meta_value END) AS billing_city
+                    FROM `{$source_db}`.`{$prefix}postmeta` pm_email
+                    LEFT JOIN `{$source_db}`.`{$prefix}postmeta` pm 
+                        ON pm_email.post_id = pm.post_id
+                    WHERE pm_email.meta_key = '_billing_email'
+                        AND pm_email.meta_value IN ($placeholders)
+                    GROUP BY pm_email.meta_value";
+            
+            $prepared = $wpdb->prepare($sql, $chunk);
+            $results = $wpdb->get_results($prepared);
+            
+            // Create a map of found emails
+            $found_emails = array();
+            foreach ($results as $row) {
+                $found_emails[strtolower($row->billing_email)] = $row;
+            }
+            
+            // Add all emails from chunk, with or without customer info
+            foreach ($chunk as $email) {
+                $email_lower = strtolower($email);
+                
+                if (isset($found_emails[$email_lower])) {
+                    // Email found in database with customer info
+                    $recipients[] = $found_emails[$email_lower];
+                } else {
+                    // Email not in database, add as basic recipient
+                    $recipient = new stdClass();
+                    $recipient->billing_email = $email;
+                    $recipient->billing_first_name = '';
+                    $recipient->billing_last_name = '';
+                    $recipient->billing_city = '';
+                    $recipients[] = $recipient;
+                }
+            }
+        }
+        
+        error_log('[WP Mail Sender DB DEBUG] get_manual_email_recipients found/created ' . count($recipients) . ' recipients');
+        return $recipients;
     }
 }

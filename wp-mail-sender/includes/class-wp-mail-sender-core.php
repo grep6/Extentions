@@ -28,7 +28,8 @@ class WP_Mail_Sender_Core {
      */
     public function send_single_email($to, $subject, $body, $campaign_id = null) {
         $headers = array('Content-Type: text/html; charset=UTF-8');
-
+        // Wrap content in email-friendly HTML with inline styles
+        $styled_body = $this->wrap_email_html($body);
         // Ensure sender identity is explicitly applied even if SMTP isn’t active
         if (class_exists('WP_Mail_Sender_SMTP')) {
             $smtp = WP_Mail_Sender_SMTP::get_instance();
@@ -58,7 +59,7 @@ class WP_Mail_Sender_Core {
         );
         
         try {
-            $result = wp_mail($to, $subject, $body, $headers);
+            $result = wp_mail($to, $subject, $styled_body, $headers);
             
             if ($result) {
                 $log_data['status'] = 'sent';
@@ -229,5 +230,76 @@ class WP_Mail_Sender_Core {
         );
         
         return str_replace(array_keys($variables), array_values($variables), $content);
+    }
+    
+    /**
+     * Wrap email content in proper HTML structure with inline styles for email clients
+     */
+    private function wrap_email_html($content) {
+        // Check if content already has <html> tag
+        if (stripos($content, '<html') !== false) {
+            return $content;
+        }
+        
+        $html = '<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email</title>
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Arial,sans-serif;font-size:16px;line-height:1.6;color:#333333;background-color:#f4f4f4;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);max-width:600px;">
+                    <tr>
+                        <td style="padding:30px 40px;">
+                            ' . $this->add_inline_styles($content) . '
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>';
+        
+        return $html;
+    }
+    
+    /**
+     * Add inline styles to HTML elements for better email client compatibility
+     */
+    private function add_inline_styles($html) {
+        // Add inline styles to common HTML elements
+        $styles = array(
+            '<p>' => '<p style="margin:0 0 15px 0;padding:0;">',
+            '<p ' => '<p style="margin:0 0 15px 0;padding:0;" ',
+            '<h1>' => '<h1 style="color:#2c3e50;font-size:28px;font-weight:bold;margin:20px 0 10px 0;line-height:1.3;">',
+            '<h2>' => '<h2 style="color:#2c3e50;font-size:24px;font-weight:bold;margin:20px 0 10px 0;line-height:1.3;">',
+            '<h3>' => '<h3 style="color:#2c3e50;font-size:20px;font-weight:600;margin:20px 0 10px 0;line-height:1.3;">',
+            '<a ' => '<a style="color:#3498db;text-decoration:underline;" ',
+            '<ul>' => '<ul style="margin:0 0 15px 0;padding-left:30px;">',
+            '<ol>' => '<ol style="margin:0 0 15px 0;padding-left:30px;">',
+            '<li>' => '<li style="margin-bottom:8px;">',
+            '<blockquote>' => '<blockquote style="border-left:4px solid #3498db;padding:10px 20px;margin:15px 0;background:#f8f9fa;color:#555555;font-style:italic;">',
+            '<code>' => '<code style="background:#f4f4f4;padding:2px 6px;border-radius:3px;font-family:\'Courier New\',monospace;font-size:14px;">',
+            '<pre>' => '<pre style="background:#f4f4f4;padding:15px;border-radius:5px;overflow-x:auto;margin:15px 0;font-family:\'Courier New\',monospace;">',
+            '<img ' => '<img style="max-width:100%;height:auto;display:block;margin:15px 0;" ',
+            '<hr>' => '<hr style="border:none;border-top:2px solid #e0e0e0;margin:25px 0;">',
+            '<hr />' => '<hr style="border:none;border-top:2px solid #e0e0e0;margin:25px 0;" />',
+            '<strong>' => '<strong style="font-weight:bold;color:#2c3e50;">',
+            '<b>' => '<b style="font-weight:bold;color:#2c3e50;">',
+            '<table>' => '<table style="border-collapse:collapse;width:100%;margin:15px 0;">',
+            '<td>' => '<td style="border:1px solid #ddd;padding:10px;">',
+            '<th>' => '<th style="border:1px solid #ddd;padding:10px;background-color:#f8f9fa;font-weight:bold;text-align:left;">'
+        );
+        
+        foreach ($styles as $tag => $styled_tag) {
+            $html = str_ireplace($tag, $styled_tag, $html);
+        }
+        
+        return $html;
     }
 }
