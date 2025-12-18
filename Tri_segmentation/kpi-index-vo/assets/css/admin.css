@@ -1,0 +1,7 @@
+/* Minimal admin styles for WC KPI Cohortes */
+.wc-kpi-tab { margin-top: 16px; }
+#wc-kpi-charts { margin-top: 16px; height: 360px; }
+#wc-kpi-chart { width:100%; height:100%; }
+#wc-kpi-map { border: 1px solid #ddd; }
+
+.wrap h1 { margin-bottom: 8px; }
