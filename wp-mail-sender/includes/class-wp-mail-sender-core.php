@@ -28,6 +28,26 @@ class WP_Mail_Sender_Core {
      */
     public function send_single_email($to, $subject, $body, $campaign_id = null) {
         $headers = array('Content-Type: text/html; charset=UTF-8');
+
+        // Ensure sender identity is explicitly applied even if SMTP isn’t active
+        if (class_exists('WP_Mail_Sender_SMTP')) {
+            $smtp = WP_Mail_Sender_SMTP::get_instance();
+            if (method_exists($smtp, 'get_sender_email') && method_exists($smtp, 'get_sender_name')) {
+                $from_email = $smtp->get_sender_email();
+                $from_name = $smtp->get_sender_name();
+                if (!empty($from_email)) {
+                    $headers[] = 'From: ' . (empty($from_name) ? $from_email : ($from_name . ' <' . $from_email . '>'));
+                    // Prefer configured Reply-To if available
+                    $reply_email = method_exists($smtp, 'get_reply_to_email') ? $smtp->get_reply_to_email() : '';
+                    $reply_name  = method_exists($smtp, 'get_reply_to_name') ? $smtp->get_reply_to_name() : '';
+                    if (!empty($reply_email)) {
+                        $headers[] = 'Reply-To: ' . (empty($reply_name) ? $reply_email : ($reply_name . ' <' . $reply_email . '>'));
+                    } else {
+                        $headers[] = 'Reply-To: ' . (empty($from_name) ? $from_email : ($from_name . ' <' . $from_email . '>'));
+                    }
+                }
+            }
+        }
         
         $log_data = array(
             'campaign_id' => $campaign_id,

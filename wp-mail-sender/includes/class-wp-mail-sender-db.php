@@ -198,24 +198,24 @@ class WP_Mail_Sender_DB {
     
     /**
      * Get WooCommerce customers from source database
+     * Uses WordPress $wpdb connection (which has access to source DB)
      */
     public function get_wc_customers($filters = array()) {
         global $wpdb;
         
-        $source_db = $this->source_db;
-        // Use configured prefix for the source database
         $prefix = WP_MAIL_SENDER_SOURCE_PREFIX;
         
+        // Query customers using $wpdb (WordPress user has access)
         $sql = "SELECT DISTINCT 
                 u.ID, 
                 u.user_email, 
                 u.display_name,
                 um1.meta_value as first_name,
                 um2.meta_value as last_name
-            FROM `{$source_db}`.`{$prefix}users` u
-            INNER JOIN `{$source_db}`.`{$prefix}usermeta` um ON u.ID = um.user_id
-            LEFT JOIN `{$source_db}`.`{$prefix}usermeta` um1 ON u.ID = um1.user_id AND um1.meta_key = 'first_name'
-            LEFT JOIN `{$source_db}`.`{$prefix}usermeta` um2 ON u.ID = um2.user_id AND um2.meta_key = 'last_name'
+            FROM {$wpdb->users} u
+            INNER JOIN {$wpdb->usermeta} um ON u.ID = um.user_id
+            LEFT JOIN {$wpdb->usermeta} um1 ON u.ID = um1.user_id AND um1.meta_key = 'first_name'
+            LEFT JOIN {$wpdb->usermeta} um2 ON u.ID = um2.user_id AND um2.meta_key = 'last_name'
             WHERE um.meta_key = '{$prefix}capabilities' 
             AND um.meta_value LIKE '%customer%'";
         
@@ -240,28 +240,31 @@ class WP_Mail_Sender_DB {
     }
     
     /**
-     * Get WooCommerce orders from source database (HPOS OPTIMIZED)
+     * Get WooCommerce orders from source database (Legacy postmeta)
+     * Uses WordPress $wpdb connection (which has access to source DB)
+     * 
+     * TODO: HPOS Support (commented for future use)
      */
     public function get_wc_orders($filters = array()) {
         global $wpdb;
         
-        $source_db = $this->source_db;
-        // Use configured prefix for the source database
         $prefix = WP_MAIL_SENDER_SOURCE_PREFIX;
         
-        // Try HPOS tables first (detect using information_schema with proper DB + table name)
+        // HPOS check (DISABLED FOR NOW - keeping for future reference)
+        /*
+        $hpos_table = "{$wpdb->prefix}wc_orders";
         $hpos_table_exists = (int) $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s",
-                $source_db,
-                $prefix . 'wc_orders'
+                DB_NAME,
+                $hpos_table
             )
         ) > 0;
         
         error_log('[WP Mail Sender DB DEBUG] HPOS table exists: ' . ($hpos_table_exists ? 'YES' : 'NO'));
         
         if ($hpos_table_exists) {
-            // Use HPOS tables (OPTIMIZED)
+            // HPOS tables query (DISABLED)
             $sql = "SELECT 
                     o.id AS order_id,
                     a.email AS billing_email,
@@ -269,8 +272,8 @@ class WP_Mail_Sender_DB {
                     a.last_name AS billing_last_name,
                     o.date_created_gmt AS order_date,
                     o.total_amount
-                FROM `{$source_db}`.`{$prefix}wc_orders` o
-                INNER JOIN `{$source_db}`.`{$prefix}wc_order_addresses` a 
+                FROM {$wpdb->prefix}wc_orders o
+                INNER JOIN {$wpdb->prefix}wc_order_addresses a 
                     ON o.id = a.order_id AND a.address_type = 'billing'
                 WHERE o.status IN ('wc-completed', 'wc-processing')
                 AND a.email IS NOT NULL
@@ -284,7 +287,6 @@ class WP_Mail_Sender_DB {
                 $sql .= $wpdb->prepare(" AND o.date_created_gmt <= %s", $filters['date_to']);
             }
             
-            // Add default date filter if no filters provided (last 2 years)
             if (empty($filters['date_from']) && empty($filters['date_to'])) {
                 $sql .= " AND o.date_created_gmt >= DATE_SUB(NOW(), INTERVAL 2 YEAR)";
             }
@@ -292,8 +294,9 @@ class WP_Mail_Sender_DB {
             $sql .= " GROUP BY a.email, o.id
                      ORDER BY o.date_created_gmt DESC";
         } else {
-            // Fallback to legacy tables
-            error_log('[WP Mail Sender DB INFO] [' . current_time('mysql') . '] HPOS tables not found, using legacy postmeta');
+        */
+            // Legacy postmeta tables (CURRENTLY ACTIVE)
+            error_log('[WP Mail Sender DB INFO] [' . current_time('mysql') . '] Using legacy postmeta');
             
             $sql = "SELECT 
                     p.ID AS order_id,
@@ -301,14 +304,15 @@ class WP_Mail_Sender_DB {
                     first_name.meta_value AS billing_first_name,
                     last_name.meta_value AS billing_last_name,
                     p.post_date AS order_date
-                FROM `{$source_db}`.`{$prefix}posts` p
-                INNER JOIN `{$source_db}`.`{$prefix}postmeta` email 
+                FROM {$wpdb->posts} p
+                INNER JOIN {$wpdb->postmeta} email 
                     ON p.ID = email.post_id AND email.meta_key = '_billing_email'
-                LEFT JOIN `{$source_db}`.`{$prefix}postmeta` first_name 
+                LEFT JOIN {$wpdb->postmeta} first_name 
                     ON p.ID = first_name.post_id AND first_name.meta_key = '_billing_first_name'
-                LEFT JOIN `{$source_db}`.`{$prefix}postmeta` last_name 
+                LEFT JOIN {$wpdb->postmeta} last_name 
                     ON p.ID = last_name.post_id AND last_name.meta_key = '_billing_last_name'
                 WHERE p.post_type = 'shop_order'
+                AND p.post_status IN ('wc-completed', 'wc-processing')
                 AND email.meta_value IS NOT NULL
                 AND email.meta_value != ''";
             
@@ -326,7 +330,7 @@ class WP_Mail_Sender_DB {
             
             $sql .= " GROUP BY email.meta_value
                      ORDER BY p.post_date DESC";
-        }
+        // }
         
         error_log('[WP Mail Sender DB DEBUG] get_wc_orders SQL: ' . $sql);
         $results = $wpdb->get_results($sql);
@@ -955,6 +959,53 @@ class WP_Mail_Sender_DB {
             return array();
         }
         
+        return $results;
+    }
+
+    /**
+     * New customers on a period (legacy postmeta)
+     * Returns one row per unique billing email whose first order date falls within [date_from, date_to]
+     */
+    public function get_new_customers_legacy($date_from, $date_to) {
+        global $wpdb;
+
+        if (empty($date_from) || empty($date_to)) {
+            return array();
+        }
+
+        // Normalize dates to datetime range: start inclusive, end exclusive
+        $start = date('Y-m-d 00:00:00', strtotime($date_from));
+        $end   = date('Y-m-d 00:00:00', strtotime($date_to . ' +1 day'));
+
+        $sql = "SELECT 
+                    MIN(p.post_date) AS first_date,
+                    email.meta_value AS billing_email,
+                    MAX(first_name.meta_value) AS billing_first_name,
+                    MAX(last_name.meta_value) AS billing_last_name
+                FROM {$wpdb->posts} p
+                INNER JOIN {$wpdb->postmeta} email 
+                    ON p.ID = email.post_id AND email.meta_key = '_billing_email'
+                LEFT JOIN {$wpdb->postmeta} first_name 
+                    ON p.ID = first_name.post_id AND first_name.meta_key = '_billing_first_name'
+                LEFT JOIN {$wpdb->postmeta} last_name 
+                    ON p.ID = last_name.post_id AND last_name.meta_key = '_billing_last_name'
+                WHERE p.post_type = 'shop_order'
+                  AND p.post_status IN ('wc-completed','wc-processing')
+                  AND email.meta_value IS NOT NULL
+                  AND email.meta_value != ''
+                GROUP BY email.meta_value
+                HAVING first_date >= %s AND first_date < %s
+                ORDER BY first_date ASC";
+
+        $prepared = $wpdb->prepare($sql, $start, $end);
+        error_log('[WP Mail Sender DB DEBUG] get_new_customers_legacy SQL: ' . $prepared);
+        $results = $wpdb->get_results($prepared);
+
+        if ($wpdb->last_error) {
+            error_log('[WP Mail Sender DB ERROR] get_new_customers_legacy: ' . $wpdb->last_error);
+            return array();
+        }
+
         return $results;
     }
 }

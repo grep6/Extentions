@@ -3,7 +3,7 @@
  * Plugin Name: WP Mail Sender
  * Plugin URI: https://tabac-des-battieres.com
  * Description: Extension d'envoi d'emails via SMTP avec gestion de templates et listes de diffusion
- * Version: 1.1.0
+ * Version: 1.1.1
  * Author: Antonin pour Tabac des Battières
  * Author URI: https://tabac-des-battieres.com
  * License: GPL-2.0+
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WP_MAIL_SENDER_VERSION', '1.1.0');
+define('WP_MAIL_SENDER_VERSION', '1.1.1');
 define('WP_MAIL_SENDER_PATH', plugin_dir_path(__FILE__));
 define('WP_MAIL_SENDER_URL', plugin_dir_url(__FILE__));
 define('WP_MAIL_SENDER_BASENAME', plugin_basename(__FILE__));

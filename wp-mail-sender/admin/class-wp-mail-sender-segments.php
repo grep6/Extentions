@@ -127,6 +127,16 @@ class WP_Mail_Sender_Segments {
                                        class="regular-text">
                             </td>
                         </tr>
+                        <tr>
+                            <th scope="row"><label for="new_customers">Nouveaux clients (première commande dans la période)</label></th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" id="new_customers" name="new_customers" value="1" <?php echo ($segment && $segment->filters && !empty(json_decode($segment->filters, true)['new_customers'])) ? 'checked' : ''; ?>>
+                                    Activer
+                                </label>
+                                <p class="description">Basé sur la première commande (legacy postmeta). Nécessite une période.</p>
+                            </td>
+                        </tr>
                         
                         <!-- Filtre par ville -->
                         <tr>
@@ -375,6 +385,7 @@ class WP_Mail_Sender_Segments {
                             nonce: '<?php echo wp_create_nonce('wp_mail_sender_preview_segment'); ?>',
                             date_from: $('#date_from').val(),
                             date_to: $('#date_to').val(),
+                            new_customers: $('#new_customers').is(':checked') ? 1 : 0,
                             city_type: $('#city_type').val(),
                             cities: $('#cities').val(),
                             postcode_type: $('#postcode_type').val(),
@@ -423,6 +434,7 @@ class WP_Mail_Sender_Segments {
                                 $filters = json_decode($seg->filters, true) ?: array();
                                 $active_filters = array();
                                 if (!empty($filters['date_from']) || !empty($filters['date_to'])) $active_filters[] = 'Période';
+                                if (!empty($filters['new_customers'])) $active_filters[] = 'Nouveaux clients';
                                 if (!empty($filters['city_type'])) $active_filters[] = 'Ville';
                                 if (!empty($filters['postcode_type'])) $active_filters[] = 'Code postal';
                                 if (!empty($filters['product_filter_type'])) $active_filters[] = 'Produits';
@@ -464,6 +476,7 @@ class WP_Mail_Sender_Segments {
         $filters = array(
             'date_from' => sanitize_text_field($_POST['date_from'] ?? ''),
             'date_to' => sanitize_text_field($_POST['date_to'] ?? ''),
+            'new_customers' => !empty($_POST['new_customers']) ? 1 : 0,
             'city_type' => sanitize_text_field($_POST['city_type'] ?? ''),
             'cities' => sanitize_textarea_field($_POST['cities'] ?? ''),
             'postcode_type' => sanitize_text_field($_POST['postcode_type'] ?? ''),
@@ -546,6 +559,7 @@ class WP_Mail_Sender_Segments {
         $filters = array(
             'date_from' => sanitize_text_field($_POST['date_from'] ?? ''),
             'date_to' => sanitize_text_field($_POST['date_to'] ?? ''),
+            'new_customers' => !empty($_POST['new_customers']) ? 1 : 0,
             'city_type' => sanitize_text_field($_POST['city_type'] ?? ''),
             'cities' => sanitize_textarea_field($_POST['cities'] ?? ''),
             'postcode_type' => sanitize_text_field($_POST['postcode_type'] ?? ''),
@@ -592,7 +606,11 @@ class WP_Mail_Sender_Segments {
             return;
         }
         
-        $recipients = $this->db->get_segment_recipients($filters);
+        if (!empty($filters['new_customers']) && !empty($filters['date_from']) && !empty($filters['date_to'])) {
+            $recipients = $this->db->get_new_customers_legacy($filters['date_from'], $filters['date_to']);
+        } else {
+            $recipients = $this->db->get_segment_recipients($filters);
+        }
         
         $html = '<table class="wp-list-table widefat"><thead><tr><th>Email</th><th>Nom</th><th>Ville</th></tr></thead><tbody>';
         
@@ -602,9 +620,9 @@ class WP_Mail_Sender_Segments {
                 $html .= '<tr><td colspan="3"><em>... et ' . (count($recipients) - 15) . ' autres</em></td></tr>';
                 break;
             }
-            $email = $recipient->billing_email ?? $recipient->user_email ?? '';
-            $name = trim(($recipient->billing_first_name ?? $recipient->first_name ?? '') . ' ' . ($recipient->billing_last_name ?? $recipient->last_name ?? ''));
-            $city = $recipient->billing_city ?? $recipient->shipping_city ?? '';
+            $email = $recipient->billing_email ?? $recipient->user_email ?? ($recipient->email ?? '');
+            $name = trim(($recipient->billing_first_name ?? $recipient->first_name ?? ($recipient->name ?? '')) . ' ' . ($recipient->billing_last_name ?? $recipient->last_name ?? ''));
+            $city = $recipient->billing_city ?? $recipient->shipping_city ?? ($recipient->city ?? '');
             $html .= '<tr><td>' . esc_html($email) . '</td><td>' . esc_html($name) . '</td><td>' . esc_html($city) . '</td></tr>';
             $count++;
         }

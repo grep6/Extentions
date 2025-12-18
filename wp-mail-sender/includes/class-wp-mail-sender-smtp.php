@@ -10,6 +10,8 @@ if (!defined('ABSPATH')) {
 class WP_Mail_Sender_SMTP {
     
     private static $instance = null;
+    private $from_email = null;
+    private $from_name = null;
     
     public static function get_instance() {
         if (null === self::$instance) {
@@ -22,6 +24,7 @@ class WP_Mail_Sender_SMTP {
         add_action('phpmailer_init', array($this, 'configure_smtp'));
         add_filter('wp_mail_from', array($this, 'mail_from'));
         add_filter('wp_mail_from_name', array($this, 'mail_from_name'));
+        add_action('wp_mail_failed', array($this, 'on_mail_failed'));
     }
     
     /**
@@ -38,21 +41,45 @@ class WP_Mail_Sender_SMTP {
             return; // Ne pas tenter d'envoyer sans mot de passe
         }
         
+        // Log configuration details
+        error_log('[WP Mail Sender SMTP INFO] [' . current_time('mysql') . '] Preparing SMTP config');
+        error_log('[WP Mail Sender SMTP INFO] Host: ' . WP_MAIL_SENDER_SMTP_HOST . ' Port: ' . WP_MAIL_SENDER_SMTP_PORT);
+        error_log('[WP Mail Sender SMTP INFO] User: ' . WP_MAIL_SENDER_SMTP_USER . ' Secure: ' . WP_MAIL_SENDER_SMTP_SECURE);
+        
         $phpmailer->isSMTP();
         $phpmailer->Host = WP_MAIL_SENDER_SMTP_HOST;
         $phpmailer->SMTPAuth = true;
         $phpmailer->Port = WP_MAIL_SENDER_SMTP_PORT;
         $phpmailer->Username = WP_MAIL_SENDER_SMTP_USER;
         $phpmailer->Password = $smtp_password;
-        $phpmailer->SMTPSecure = WP_MAIL_SENDER_SMTP_SECURE;
-        $phpmailer->SMTPAutoTLS = true;
+        $phpmailer->CharSet = 'UTF-8';
         
-        // Debug mode (disabled by default)
+        // Encryption & TLS negotiation
+        $phpmailer->SMTPSecure = WP_MAIL_SENDER_SMTP_SECURE; // 'ssl' or 'tls'
+        // Disable AutoTLS for implicit SSL (port 465) to avoid STARTTLS negotiation issues
+        $phpmailer->SMTPAutoTLS = (strtolower(WP_MAIL_SENDER_SMTP_SECURE) === 'tls');
+        
+        // Enable debug output when requested
         if (defined('WP_MAIL_SENDER_DEBUG') && WP_MAIL_SENDER_DEBUG) {
-            $phpmailer->SMTPDebug = 2;
+            $phpmailer->SMTPDebug = 2; // client and server messages
             $phpmailer->Debugoutput = function($str, $level) {
                 error_log('[WP Mail Sender SMTP DEBUG] ' . $str);
             };
+        }
+        
+        // Force From and Reply-To to the configured address
+        $from_email = $this->get_from_email();
+        $from_name = $this->get_from_name();
+        if (!empty($from_email)) {
+            $phpmailer->setFrom($from_email, $from_name, false);
+            $phpmailer->clearReplyTos();
+            $reply_email = $this->get_reply_to_email();
+            $reply_name  = $this->get_reply_to_name();
+            if (!empty($reply_email)) {
+                $phpmailer->addReplyTo($reply_email, $reply_name ?: $from_name);
+            } else {
+                $phpmailer->addReplyTo($from_email, $from_name);
+            }
         }
         
         error_log('[WP Mail Sender SMTP INFO] [' . current_time('mysql') . '] SMTP configured for ' . WP_MAIL_SENDER_SMTP_USER);
@@ -62,14 +89,68 @@ class WP_Mail_Sender_SMTP {
      * Set from email address
      */
     public function mail_from($email) {
-        return WP_MAIL_SENDER_SMTP_USER;
+        return $this->get_from_email();
     }
     
     /**
      * Set from name
      */
     public function mail_from_name($name) {
-        return get_option('wp_mail_sender_from_name', 'Tabac des Battières');
+        return $this->get_from_name();
+    }
+
+    private function get_from_email() {
+        if ($this->from_email !== null) {
+            return $this->from_email;
+        }
+        $configured = get_option('wp_mail_sender_from_email', WP_MAIL_SENDER_SMTP_USER);
+        $this->from_email = is_email($configured) ? $configured : WP_MAIL_SENDER_SMTP_USER;
+        return $this->from_email;
+    }
+
+    private function get_from_name() {
+        if ($this->from_name !== null) {
+            return $this->from_name;
+        }
+        $this->from_name = get_option('wp_mail_sender_from_name', 'Tabac des Battières');
+        return $this->from_name;
+    }
+
+    /**
+     * Public accessors for sender identity
+     */
+    public function get_sender_email() {
+        return $this->get_from_email();
+    }
+
+    public function get_sender_name() {
+        return $this->get_from_name();
+    }
+
+    /**
+     * Reply-To accessors (options are optional)
+     */
+    public function get_reply_to_email() {
+        $email = get_option('wp_mail_sender_reply_to_email', '');
+        return is_email($email) ? $email : '';
+    }
+
+    public function get_reply_to_name() {
+        return get_option('wp_mail_sender_reply_to_name', '');
+    }
+    
+    /**
+     * Log detailed failure info when wp_mail fails
+     */
+    public function on_mail_failed($wp_error) {
+        $msg = $wp_error instanceof WP_Error ? $wp_error->get_error_message() : 'Unknown error';
+        error_log('[WP Mail Sender SMTP ERROR] [' . current_time('mysql') . '] wp_mail_failed: ' . $msg);
+        if ($wp_error instanceof WP_Error) {
+            $data = $wp_error->get_error_data();
+            if (!empty($data)) {
+                error_log('[WP Mail Sender SMTP ERROR] Error data: ' . print_r($data, true));
+            }
+        }
     }
     
     /**
@@ -80,7 +161,9 @@ class WP_Mail_Sender_SMTP {
         $subject = 'WP Mail Sender - Test de connexion SMTP';
         $message = 'Ceci est un email de test pour vérifier la configuration SMTP.';
         
-        $result = wp_mail($to, $subject, $message);
+        // Force From header to ensure correct account
+        $headers = array('From: ' . WP_MAIL_SENDER_SMTP_USER);
+        $result = wp_mail($to, $subject, $message, $headers);
         
         if ($result) {
             error_log('[WP Mail Sender SMTP] [' . current_time('mysql') . '] Test email sent successfully');

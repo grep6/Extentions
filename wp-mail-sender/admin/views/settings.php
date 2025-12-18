@@ -65,6 +65,30 @@ $env_color = $environment === 'staging' ? '#d63638' : '#00a32a';
                 </td>
             </tr>
             <tr>
+                <th scope="row"><label for="from_email">Adresse d'expéditeur (From)</label></th>
+                <td>
+                    <input type="email" 
+                           id="from_email" 
+                           name="from_email" 
+                           value="<?php echo esc_attr(get_option('wp_mail_sender_from_email', WP_MAIL_SENDER_SMTP_USER)); ?>" 
+                           class="regular-text" 
+                           placeholder="social@tabac-des-battieres.com" />
+                    <p class="description">Adresse utilisée dans l'en-tête <code>From</code>. Par défaut, le compte SMTP.</p>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><label for="reply_to_email">Adresse de réponse (Reply-To)</label></th>
+                <td>
+                    <input type="email"
+                           id="reply_to_email"
+                           name="reply_to_email"
+                           value="<?php echo esc_attr(get_option('wp_mail_sender_reply_to_email', WP_MAIL_SENDER_SMTP_USER)); ?>"
+                           class="regular-text"
+                           placeholder="social@tabac-des-battieres.com" />
+                    <p class="description">Par défaut: <code><?php echo esc_html(WP_MAIL_SENDER_SMTP_USER); ?></code> (adresse "social").</p>
+                </td>
+            </tr>
+            <tr>
                 <th scope="row">
                     <label for="smtp_password">
                         <strong style="color: #dc3232;">* Mot de passe SMTP</strong>
@@ -96,6 +120,17 @@ $env_color = $environment === 'staging' ? '#d63638' : '#00a32a';
                            value="<?php echo esc_attr(get_option('wp_mail_sender_from_name', 'Tabac des Battières')); ?>" 
                            class="regular-text" />
                     <p class="description">Nom affiché dans les emails reçus</p>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><label for="reply_to_name">Nom du Reply-To</label></th>
+                <td>
+                    <input type="text"
+                           id="reply_to_name"
+                           name="reply_to_name"
+                           value="<?php echo esc_attr(get_option('wp_mail_sender_reply_to_name', '')); ?>"
+                           class="regular-text" />
+                    <p class="description">Optionnel. Nom affiché pour l'adresse de réponse.</p>
                 </td>
             </tr>
         </table>

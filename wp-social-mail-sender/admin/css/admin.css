@@ -1,0 +1,87 @@
+/* WP Social Mail Sender Admin Styles */
+
+.wp-social-mail-sender-admin {
+    padding: 20px;
+}
+
+.wp-social-mail-sender-container {
+    max-width: 900px;
+    margin-top: 20px;
+}
+
+.wp-social-mail-sender-card {
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.wp-social-mail-sender-card h2 {
+    margin-top: 0;
+    color: #23282d;
+    border-bottom: 2px solid #0073aa;
+    padding-bottom: 10px;
+}
+
+.wp-social-mail-sender-card .form-table {
+    width: 100%;
+}
+
+.wp-social-mail-sender-card .form-table th {
+    width: 200px;
+    padding: 15px 10px;
+    text-align: left;
+}
+
+.wp-social-mail-sender-card .form-table td {
+    padding: 15px 10px;
+}
+
+.wp-social-mail-sender-card input[type="text"],
+.wp-social-mail-sender-card input[type="email"],
+.wp-social-mail-sender-card input[type="password"] {
+    width: 400px;
+    max-width: 100%;
+}
+
+.wp-social-mail-sender-card input:disabled {
+    background-color: #f5f5f5;
+    color: #666;
+}
+
+.wp-social-mail-sender-card .description {
+    display: block;
+    margin-top: 5px;
+    color: #666;
+    font-size: 13px;
+}
+
+#test-result {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: 3px;
+}
+
+#test-result.success {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+#test-result.error {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+/* WP Editor styling */
+.wp-social-mail-sender-card .wp-editor-wrap {
+    margin: 10px 0;
+}
+
+.wp-social-mail-sender-card textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+}

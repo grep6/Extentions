@@ -128,6 +128,25 @@ class WP_Mail_Sender_Admin {
             }
             
             $headers = array('Content-Type: text/html; charset=UTF-8');
+
+            // Apply explicit sender for consistent identity in tests
+            if (class_exists('WP_Mail_Sender_SMTP')) {
+                $smtp = WP_Mail_Sender_SMTP::get_instance();
+                if (method_exists($smtp, 'get_sender_email') && method_exists($smtp, 'get_sender_name')) {
+                    $from_email = $smtp->get_sender_email();
+                    $from_name = $smtp->get_sender_name();
+                    if (!empty($from_email)) {
+                        $headers[] = 'From: ' . (empty($from_name) ? $from_email : ($from_name . ' <' . $from_email . '>'));
+                        $reply_email = method_exists($smtp, 'get_reply_to_email') ? $smtp->get_reply_to_email() : '';
+                        $reply_name  = method_exists($smtp, 'get_reply_to_name') ? $smtp->get_reply_to_name() : '';
+                        if (!empty($reply_email)) {
+                            $headers[] = 'Reply-To: ' . (empty($reply_name) ? $reply_email : ($reply_name . ' <' . $reply_email . '>'));
+                        } else {
+                            $headers[] = 'Reply-To: ' . (empty($from_name) ? $from_email : ($from_name . ' <' . $from_email . '>'));
+                        }
+                    }
+                }
+            }
             $html_message = '<html><body style="font-family: Arial, sans-serif; line-height: 1.6;">';
             $html_message .= '<h2 style="color: #0073aa;">Test WP Mail Sender</h2>';
             $html_message .= '<div style="background: #f0f0f1; padding: 15px; border-left: 4px solid #00a32a; margin: 20px 0;">';
@@ -167,6 +186,29 @@ class WP_Mail_Sender_Admin {
         // Save from name
         if (isset($_POST['from_name'])) {
             update_option('wp_mail_sender_from_name', sanitize_text_field($_POST['from_name']));
+        }
+        
+        // Save from email
+        if (isset($_POST['from_email'])) {
+            $email = sanitize_email($_POST['from_email']);
+            if (!empty($email) && is_email($email)) {
+                update_option('wp_mail_sender_from_email', $email);
+            }
+        }
+
+        // Save reply-to email (optional)
+        if (isset($_POST['reply_to_email'])) {
+            $reply = sanitize_email($_POST['reply_to_email']);
+            if (empty($reply)) {
+                update_option('wp_mail_sender_reply_to_email', '');
+            } elseif (is_email($reply)) {
+                update_option('wp_mail_sender_reply_to_email', $reply);
+            }
+        }
+
+        // Save reply-to name (optional)
+        if (isset($_POST['reply_to_name'])) {
+            update_option('wp_mail_sender_reply_to_name', sanitize_text_field($_POST['reply_to_name']));
         }
         
         // Test connection if requested
