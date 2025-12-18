@@ -118,13 +118,31 @@ class WP_Mail_Sender_Templates {
                                 $content = $template ? $template->body : '';
                                 wp_editor($content, 'template_body', array(
                                     'textarea_name' => 'template_body',
-                                    'textarea_rows' => 15,
+                                    'textarea_rows' => 20,
                                     'media_buttons' => true,
                                     'teeny' => false,
-                                    'tinymce' => true
+                                    'tinymce' => array(
+                                        'toolbar1' => 'formatselect,bold,italic,underline,strikethrough,|,bullist,numlist,blockquote,|,alignleft,aligncenter,alignright,|,link,unlink,|,forecolor,backcolor',
+                                        'toolbar2' => 'undo,redo,|,pastetext,removeformat,|,charmap,hr,|,outdent,indent,|,wp_adv',
+                                        'block_formats' => 'Paragraphe=p;Titre 1=h1;Titre 2=h2;Titre 3=h3;Citation=blockquote;Code=pre',
+                                        'forced_root_block' => 'p',
+                                        'force_br_newlines' => false,
+                                        'force_p_newlines' => true,
+                                        'convert_newlines_to_brs' => false,
+                                        'remove_linebreaks' => false,
+                                        'wpautop' => true,
+                                        'paste_as_text' => false,
+                                        'content_css' => WP_MAIL_SENDER_URL . 'admin/css/editor-email.css'
+                                    ),
+                                    'quicktags' => array(
+                                        'buttons' => 'strong,em,link,block,del,ins,img,ul,ol,li,code,close'
+                                    )
                                 ));
                                 ?>
-                                <p class="description">Contenu HTML de l'email</p>
+                                <p class="description">
+                                    Contenu HTML de l'email. Les retours à la ligne sont automatiquement convertis en paragraphes.<br>
+                                    <strong>💡 Astuce :</strong> Utilisez <kbd>Maj+Entrée</kbd> pour un simple retour à la ligne, <kbd>Entrée</kbd> pour un nouveau paragraphe.
+                                </p>
                             </td>
                         </tr>
                     </table>
