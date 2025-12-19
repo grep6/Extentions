@@ -299,8 +299,16 @@ class WP_Mail_Sender_Send {
                         <td><?php echo esc_html(date_i18n('d/m/Y H:i', strtotime($campaign->created_at))); ?></td>
                         <td>
                             <?php 
-                            $updated = isset($campaign->updated_at) ? $campaign->updated_at : $campaign->created_at;
-                            echo esc_html(date_i18n('d/m/Y H:i', strtotime($updated))); 
+                            // Avoid bogus dates when updated_at is NULL/empty/zero
+                            $zero_date = '0000-00-00 00:00:00';
+                            $updated_source = (!empty($campaign->updated_at) && $campaign->updated_at !== $zero_date)
+                                ? $campaign->updated_at
+                                : $campaign->created_at;
+                            if (empty($updated_source) || $updated_source === $zero_date) {
+                                echo '-';
+                            } else {
+                                echo esc_html(date_i18n('d/m/Y H:i', strtotime($updated_source)));
+                            }
                             ?>
                         </td>
                     </tr>

@@ -150,16 +150,37 @@ class WP_Mail_Sender_Core {
         }
         
         if (empty($recipients)) {
-            error_log('[WP Mail Sender CORE ERROR] No recipients found for list: ' . $list->id);
+            // Mark campaign as failed to avoid leaving it in draft forever
+            $wpdb->update(
+                "`{$mailing_db}`.`{$prefix}campaigns`",
+                array(
+                    'status' => 'failed',
+                    'total_recipients' => 0,
+                    'sent_count' => 0,
+                    'failed_count' => 0,
+                    'updated_at' => current_time('mysql')
+                ),
+                array('id' => $campaign_id)
+            );
+            error_log('[WP Mail Sender CORE ERROR] No recipients found for campaign ID: ' . $campaign_id);
+            if (!empty($wpdb->last_error)) {
+                error_log('[WP Mail Sender CORE ERROR] Update failed: ' . $wpdb->last_error);
+            }
             return false;
         }
         
-        // Update campaign status
-        $wpdb->update(
+        $total = count($recipients);
+        error_log('[WP Mail Sender CORE] Recipients total: ' . $total);
+        
+        // Update campaign status and total
+        $update_result = $wpdb->update(
             "`{$mailing_db}`.`{$prefix}campaigns`",
-            array('status' => 'sending', 'total_recipients' => count($recipients)),
+            array('status' => 'sending', 'total_recipients' => $total),
             array('id' => $campaign_id)
         );
+        if ($update_result === false) {
+            error_log('[WP Mail Sender CORE ERROR] Failed to set sending status: ' . $wpdb->last_error);
+        }
         
         $sent_count = 0;
         $failed_count = 0;
@@ -205,7 +226,7 @@ class WP_Mail_Sender_Core {
         }
         
         // Update campaign final status
-        $wpdb->update(
+        $final_update = $wpdb->update(
             "`{$mailing_db}`.`{$prefix}campaigns`",
             array(
                 'status' => 'sent',
@@ -216,8 +237,11 @@ class WP_Mail_Sender_Core {
             ),
             array('id' => $campaign_id)
         );
+        if ($final_update === false) {
+            error_log('[WP Mail Sender CORE ERROR] Final update failed: ' . $wpdb->last_error);
+        }
         
-        error_log('[WP Mail Sender CORE] [' . current_time('mysql') . '] Campaign completed. Sent: ' . $sent_count . ', Failed: ' . $failed_count);
+        error_log('[WP Mail Sender CORE] [' . current_time('mysql') . '] Campaign completed. Sent: ' . $sent_count . ', Failed: ' . $failed_count . ' | Final update: ' . var_export($final_update, true));
         
         return true;
     }
